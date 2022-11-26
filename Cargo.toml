@@ -1,0 +1,10 @@
+[package]
+name = "etg"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.66"
+csv = "1.1.6"
+reqwest = { version = "0.11.13", features = ["blocking"] }
+tl = "0.7.7"
