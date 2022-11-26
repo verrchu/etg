@@ -8,3 +8,11 @@ anyhow = "1.0.66"
 csv = "1.1.6"
 reqwest = { version = "0.11.13", features = ["blocking"] }
 tl = "0.7.7"
+
+[[bin]]
+name = "get_guns"
+path = "bin/get_guns.rs"
+
+[[bin]]
+name = "get_gun_tiers"
+path = "bin/get_gun_tiers.rs"
