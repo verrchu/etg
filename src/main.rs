@@ -1,4 +1,5 @@
 mod gun;
+mod item;
 
 use std::fs::File;
 use std::io::Write;
@@ -17,7 +18,7 @@ fn main() {
 
     let records = csv_reader
         .deserialize()
-        .collect::<Result<Vec<gun::V1>, _>>()
+        .collect::<Result<Vec<item::Essential>, _>>()
         .unwrap();
     let records = ron::ser::to_string_pretty(&records, Default::default()).unwrap();
 

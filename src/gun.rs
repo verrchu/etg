@@ -21,6 +21,15 @@ pub enum Kind {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct Essential {
+    name: String,
+    notes: Option<String>,
+    tier: Option<Tier>,
+    #[serde(rename(deserialize = "type"))]
+    kind: Kind,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct V1 {
     name: String,
     notes: Option<String>,
