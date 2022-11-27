@@ -26,3 +26,7 @@ path = "bin/get_items.rs"
 [[bin]]
 name = "get_item_tiers"
 path = "bin/get_item_tiers.rs"
+
+[[bin]]
+name = "get_synergies"
+path = "bin/get_synergies.rs"
