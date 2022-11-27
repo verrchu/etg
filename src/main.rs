@@ -1,5 +1,6 @@
 mod gun;
 mod item;
+mod synergy;
 
 use std::fs::File;
 use std::io::Write;
