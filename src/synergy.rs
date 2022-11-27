@@ -4,19 +4,20 @@ use super::item::Item;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 enum Part {
     Gun(Gun),
     Item(Item),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Repr {
-    name: String,
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct Spec {
     effect: String,
     parts: Parts,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 enum Parts {
     Single(Part),
     OneOf(Vec<Part>),
@@ -26,7 +27,7 @@ enum Parts {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 enum Synergy {
     #[serde(rename = "Absent Minded")]
     AbsentMinded,
@@ -820,4 +821,40 @@ enum Synergy {
     _WillingToSacrifice,
     #[serde(rename = r#"\o/"#)]
     _HandsUp,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::collections::HashMap;
+
+    mod deserialize {
+        use super::*;
+
+        #[test]
+        fn test_single() {
+            let raw = r#"
+            {
+                "Wicked Sister": {
+                    "effect": "something",
+                    "parts": {"single": {"gun": "Casey"}}
+                }
+            }
+            "#;
+
+            let expected = HashMap::<Synergy, Spec>::from_iter([(
+                Synergy::_WickedSister,
+                Spec {
+                    effect: "something".to_string(),
+                    parts: Parts::Single(Part::Gun(Gun::_Casey)),
+                },
+            )]);
+
+            assert_eq!(
+                serde_json::from_str::<HashMap<Synergy, Spec>>(raw).unwrap(),
+                expected
+            );
+        }
+    }
 }
