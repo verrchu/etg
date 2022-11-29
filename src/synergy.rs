@@ -11,7 +11,7 @@ enum Part {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct Spec {
+pub struct Spec {
     effect: String,
     parts: Parts,
 }
@@ -23,12 +23,12 @@ enum Parts {
     OneOf(Vec<Part>),
     TwoOf(Vec<Part>),
     AllOf(Vec<Part>),
-    Combined(Box<Parts>, Box<Parts>),
+    Combined { left: Box<Parts>, right: Box<Parts> },
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-enum Synergy {
+pub enum Synergy {
     #[serde(rename = "Absent Minded")]
     AbsentMinded,
     #[serde(rename = "Added Effect - Fire")]
@@ -427,7 +427,7 @@ enum Synergy {
     _TheRedHood,
     #[serde(rename = "Regular Old Guns")]
     _RegularOldGuns,
-    #[serde(rename = "Resourceful Indeed,")]
+    #[serde(rename = "Resourceful Indeed")]
     _ResourcefulIndeed,
     #[serde(rename = "Revolution")]
     _Revolution,
