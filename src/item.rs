@@ -34,7 +34,7 @@ pub struct V1 {
     effect: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub enum Item {
     #[serde(rename = "Master Round I")]
     _MasterRoundI,
@@ -576,4 +576,19 @@ pub enum Item {
     _YellowChamber,
     #[serde(rename = "Infuriating Note")]
     _InfuriatingNote,
+}
+
+impl PartialOrd for Item {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let self_str = serde_json::to_string(self).unwrap().to_lowercase();
+        let other_str = serde_json::to_string(other).unwrap().to_lowercase();
+
+        self_str.partial_cmp(&other_str)
+    }
+}
+
+impl Ord for Item {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }

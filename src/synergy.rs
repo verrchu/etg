@@ -1,13 +1,43 @@
 use super::gun::Gun;
 use super::item::Item;
 
+use std::{collections::BTreeSet, iter};
+
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 enum Part {
     Gun(Gun),
     Item(Item),
+}
+
+impl PartialOrd for Part {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let self_str = serde_json::to_string(self).unwrap().to_lowercase();
+        let other_str = serde_json::to_string(other).unwrap().to_lowercase();
+
+        self_str.partial_cmp(&other_str)
+    }
+}
+
+impl Ord for Part {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl From<Gun> for Part {
+    fn from(gun: Gun) -> Part {
+        Part::Gun(gun)
+    }
+}
+
+impl From<Item> for Part {
+    fn from(item: Item) -> Part {
+        Part::Item(item)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -16,14 +46,59 @@ pub struct Spec {
     parts: Parts,
 }
 
+impl Spec {
+    fn roadmaps(&self) -> BTreeSet<(Part, BTreeSet<Part>)> {
+        self.parts.roadmaps()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum Parts {
     Single(Part),
-    OneOf(Vec<Part>),
-    TwoOf(Vec<Part>),
-    AllOf(Vec<Part>),
+    OneOf(BTreeSet<Part>),
+    TwoOf(BTreeSet<Part>),
+    AllOf(BTreeSet<Part>),
     Combined { left: Box<Parts>, right: Box<Parts> },
+}
+
+impl Parts {
+    fn roadmaps(&self) -> BTreeSet<(Part, BTreeSet<Part>)> {
+        match self {
+            Parts::Single(_part) => unreachable!(),
+            Parts::OneOf(_parts) => unreachable!(),
+            Parts::TwoOf(parts) => parts
+                .iter()
+                .copied()
+                .permutations(2)
+                .map(|perm| (perm[0], BTreeSet::from_iter(iter::once(perm[1]))))
+                .collect(),
+            Parts::AllOf(parts) => {
+                let mut roadmaps = BTreeSet::new();
+
+                for part in parts {
+                    let mut parts = parts.clone();
+                    parts.remove(part);
+
+                    roadmaps.insert((*part, parts));
+                }
+
+                roadmaps
+            }
+            Parts::Combined { left, right } => match (left.as_ref(), right.as_ref()) {
+                (Parts::Single(a), Parts::OneOf(b)) | (Parts::OneOf(b), Parts::Single(a)) => {
+                    todo!()
+                }
+                (Parts::Single(a), Parts::TwoOf(b)) | (Parts::TwoOf(b), Parts::Single(a)) => {
+                    todo!()
+                }
+                (Parts::OneOf(a), Parts::TwoOf(b)) | (Parts::TwoOf(b), Parts::OneOf(a)) => todo!(),
+                (Parts::OneOf(a), Parts::OneOf(b)) => todo!(),
+                (Parts::TwoOf(a), Parts::TwoOf(b)) => todo!(),
+                _ => unreachable!(),
+            },
+        }
+    }
 }
 
 impl PartialOrd for Synergy {
@@ -843,6 +918,88 @@ mod tests {
     use super::*;
 
     use std::collections::HashMap;
+
+    mod roadmap {
+        use super::*;
+
+        #[test]
+        fn test_two_of() {
+            let synergy = serde_json::from_str::<Spec>(r#"
+              {
+                "effect": "Slightly increases movement speed and increases the shot speed of the guns by 25%.",
+                "parts": {
+                  "two_of": [
+                    { "gun": "Strafe Gun" },
+                    { "gun": "BSG" },
+                    { "gun": "Thunderclap" }
+                  ]
+                }
+              }
+            "#).unwrap();
+
+            let expected = BTreeSet::from_iter([
+                (
+                    Gun::_StrafeGun.into(),
+                    BTreeSet::from_iter([Gun::_BSG.into()]),
+                ),
+                (
+                    Gun::_StrafeGun.into(),
+                    BTreeSet::from_iter([Gun::_Thunderclap.into()]),
+                ),
+                (
+                    Gun::_BSG.into(),
+                    BTreeSet::from_iter([Gun::_StrafeGun.into()]),
+                ),
+                (
+                    Gun::_BSG.into(),
+                    BTreeSet::from_iter([Gun::_Thunderclap.into()]),
+                ),
+                (
+                    Gun::_Thunderclap.into(),
+                    BTreeSet::from_iter([Gun::_StrafeGun.into()]),
+                ),
+                (
+                    Gun::_Thunderclap.into(),
+                    BTreeSet::from_iter([Gun::_BSG.into()]),
+                ),
+            ]);
+
+            assert_eq!(synergy.roadmaps(), expected);
+        }
+
+        #[test]
+        fn test_all_of() {
+            let synergy = serde_json::from_str::<Spec>(r#"
+              {
+                "effect": "Increases the damage, maximum ammo, and rate of fire of the guns by 25%.",
+                "parts": {
+                  "all_of": [
+                    { "gun": "M1" },
+                    { "gun": "M16" },
+                    { "gun": "M1911" }
+                  ]
+                }
+              }
+            "#).unwrap();
+
+            let expected = BTreeSet::from_iter([
+                (
+                    Gun::_M1.into(),
+                    BTreeSet::from_iter([Gun::_M16.into(), Gun::_M1911.into()]),
+                ),
+                (
+                    Gun::_M16.into(),
+                    BTreeSet::from_iter([Gun::_M1.into(), Gun::_M1911.into()]),
+                ),
+                (
+                    Gun::_M1911.into(),
+                    BTreeSet::from_iter([Gun::_M1.into(), Gun::_M16.into()]),
+                ),
+            ]);
+
+            assert_eq!(synergy.roadmaps(), expected);
+        }
+    }
 
     mod deserialize {
         use super::*;

@@ -49,7 +49,7 @@ pub struct V1 {
     spread: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Gun {
     #[serde(rename = "Casey")]
     _Casey,
@@ -513,4 +513,19 @@ pub enum Gun {
     _Devolver,
     #[serde(rename = "Finished Gun")]
     _FinishedGun,
+}
+
+impl PartialOrd for Gun {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let self_str = serde_json::to_string(self).unwrap().to_lowercase();
+        let other_str = serde_json::to_string(other).unwrap().to_lowercase();
+
+        self_str.partial_cmp(&other_str)
+    }
+}
+
+impl Ord for Gun {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }

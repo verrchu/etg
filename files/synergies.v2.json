@@ -131,7 +131,7 @@
           "single": { "gun": "Face Melter" }
         },
         "right": {
-          "all_of": [
+          "one_of": [
             { "item": "Drum Clip" },
             { "item": "Gilded Bullets" },
             { "item": "Heavy Bullets" },
