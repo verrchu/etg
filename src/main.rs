@@ -4,14 +4,14 @@ mod synergy;
 
 use synergy::Synergy;
 
-use std::{collections::HashMap, fs::File};
+use std::{collections::BTreeMap, fs::File};
 
 fn main() {
-    let file = std::env::args().nth(1).unwrap();
+    let input = std::env::args().nth(1).unwrap();
 
     let synergies =
-        serde_json::from_reader::<_, HashMap<Synergy, synergy::Spec>>(File::open(file).unwrap())
+        serde_json::from_reader::<_, BTreeMap<Synergy, synergy::Spec>>(File::open(input).unwrap())
             .unwrap();
 
-    println!("{synergies:#?}");
+    println!("{synergies:?}");
 }

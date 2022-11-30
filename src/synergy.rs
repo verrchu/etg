@@ -26,6 +26,21 @@ enum Parts {
     Combined { left: Box<Parts>, right: Box<Parts> },
 }
 
+impl PartialOrd for Synergy {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let self_str = serde_json::to_string(self).unwrap().to_lowercase();
+        let other_str = serde_json::to_string(other).unwrap().to_lowercase();
+
+        self_str.partial_cmp(&other_str)
+    }
+}
+
+impl Ord for Synergy {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Synergy {
