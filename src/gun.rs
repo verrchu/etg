@@ -50,7 +50,7 @@ pub struct V1 {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum Gun {
+pub enum Tag {
     #[serde(rename = "Casey")]
     _Casey,
     #[serde(rename = "Pea Shooter")]

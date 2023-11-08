@@ -1,5 +1,4 @@
-use super::gun::Gun;
-use super::item::Item;
+use super::{gun, item};
 
 use std::collections::HashSet;
 
@@ -8,18 +7,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 enum Part {
-    Gun(Gun),
-    Item(Item),
+    Gun(gun::Tag),
+    Item(item::Tag),
 }
 
-impl From<Gun> for Part {
-    fn from(gun: Gun) -> Part {
+impl From<gun::Tag> for Part {
+    fn from(gun: gun::Tag) -> Part {
         Part::Gun(gun)
     }
 }
 
-impl From<Item> for Part {
-    fn from(item: Item) -> Part {
+impl From<item::Tag> for Part {
+    fn from(item: item::Tag) -> Part {
         Part::Item(item)
     }
 }
@@ -28,6 +27,21 @@ impl From<Item> for Part {
 pub struct Spec {
     effect: String,
     parts: Parts,
+}
+
+pub struct Synergy {
+    tag: Tag,
+    spec: Spec,
+}
+
+impl Synergy {
+    pub fn new(tag: Tag, spec: Spec) -> Self {
+        Self { tag, spec }
+    }
+
+    pub fn contains(&self, part: impl Into<Part>) -> bool {
+        self.spec.parts.contains(part.into())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -40,9 +54,23 @@ enum Parts {
     Combined { left: Box<Parts>, right: Box<Parts> },
 }
 
+impl Parts {
+    fn contains(&self, part: Part) -> bool {
+        use Parts::*;
+
+        let part = part.into();
+
+        match self {
+            Single(inner) => part == *inner,
+            OneOf(inner) | TwoOf(inner) | AllOf(inner) => inner.contains(&part),
+            Combined { left, right } => left.contains(part) || right.contains(part),
+        }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum Synergy {
+pub enum Tag {
     #[serde(rename = "Absent Minded")]
     _AbsentMinded,
     #[serde(rename = "Added Effect - Fire")]

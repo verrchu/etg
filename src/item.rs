@@ -35,7 +35,7 @@ pub struct V1 {
 }
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
-pub enum Item {
+pub enum Tag {
     #[serde(rename = "Master Round I")]
     _MasterRoundI,
     #[serde(rename = "Master Round II")]
