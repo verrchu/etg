@@ -514,18 +514,3 @@ pub enum Gun {
     #[serde(rename = "Finished Gun")]
     _FinishedGun,
 }
-
-impl PartialOrd for Gun {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let self_str = serde_json::to_string(self).unwrap().to_lowercase();
-        let other_str = serde_json::to_string(other).unwrap().to_lowercase();
-
-        self_str.partial_cmp(&other_str)
-    }
-}
-
-impl Ord for Gun {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}

@@ -1,9 +1,8 @@
 use super::gun::Gun;
 use super::item::Item;
 
-use std::{collections::BTreeSet, iter};
+use std::collections::HashSet;
 
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -11,21 +10,6 @@ use serde::{Deserialize, Serialize};
 enum Part {
     Gun(Gun),
     Item(Item),
-}
-
-impl PartialOrd for Part {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let self_str = serde_json::to_string(self).unwrap().to_lowercase();
-        let other_str = serde_json::to_string(other).unwrap().to_lowercase();
-
-        self_str.partial_cmp(&other_str)
-    }
-}
-
-impl Ord for Part {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
 }
 
 impl From<Gun> for Part {
@@ -46,87 +30,27 @@ pub struct Spec {
     parts: Parts,
 }
 
-impl Spec {
-    fn roadmaps(&self) -> BTreeSet<(Part, BTreeSet<Part>)> {
-        self.parts.roadmaps()
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum Parts {
     Single(Part),
-    OneOf(BTreeSet<Part>),
-    TwoOf(BTreeSet<Part>),
-    AllOf(BTreeSet<Part>),
+    OneOf(HashSet<Part>),
+    TwoOf(HashSet<Part>),
+    AllOf(HashSet<Part>),
     Combined { left: Box<Parts>, right: Box<Parts> },
-}
-
-impl Parts {
-    fn roadmaps(&self) -> BTreeSet<(Part, BTreeSet<Part>)> {
-        match self {
-            Parts::Single(_part) => unreachable!(),
-            Parts::OneOf(_parts) => unreachable!(),
-            Parts::TwoOf(parts) => parts
-                .iter()
-                .copied()
-                .permutations(2)
-                .map(|perm| (perm[0], BTreeSet::from_iter(iter::once(perm[1]))))
-                .collect(),
-            Parts::AllOf(parts) => {
-                let mut roadmaps = BTreeSet::new();
-
-                for part in parts {
-                    let mut parts = parts.clone();
-                    parts.remove(part);
-
-                    roadmaps.insert((*part, parts));
-                }
-
-                roadmaps
-            }
-            Parts::Combined { left, right } => match (left.as_ref(), right.as_ref()) {
-                (Parts::Single(a), Parts::OneOf(b)) | (Parts::OneOf(b), Parts::Single(a)) => {
-                    todo!()
-                }
-                (Parts::Single(a), Parts::TwoOf(b)) | (Parts::TwoOf(b), Parts::Single(a)) => {
-                    todo!()
-                }
-                (Parts::OneOf(a), Parts::TwoOf(b)) | (Parts::TwoOf(b), Parts::OneOf(a)) => todo!(),
-                (Parts::OneOf(a), Parts::OneOf(b)) => todo!(),
-                (Parts::TwoOf(a), Parts::TwoOf(b)) => todo!(),
-                _ => unreachable!(),
-            },
-        }
-    }
-}
-
-impl PartialOrd for Synergy {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let self_str = serde_json::to_string(self).unwrap().to_lowercase();
-        let other_str = serde_json::to_string(other).unwrap().to_lowercase();
-
-        self_str.partial_cmp(&other_str)
-    }
-}
-
-impl Ord for Synergy {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Synergy {
     #[serde(rename = "Absent Minded")]
-    AbsentMinded,
+    _AbsentMinded,
     #[serde(rename = "Added Effect - Fire")]
-    AddedEffectFire,
+    _AddedEffectFire,
     #[serde(rename = "Added Effect - Ice")]
-    AddedEffectIce,
+    _AddedEffectIce,
     #[serde(rename = "Added Effect - Poison")]
-    AddedEffectPoison,
+    _AddedEffectPoison,
     #[serde(rename = "Akey Breaky")]
     _AkeyBreaky,
     #[serde(rename = "AI Assistant")]
