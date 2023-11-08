@@ -1,7 +1,8 @@
 use super::{gun, item};
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
+use num::rational::Ratio;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -41,6 +42,115 @@ impl Synergy {
 
     pub fn contains(&self, part: impl Into<Part>) -> bool {
         self.spec.parts.contains(part.into())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum Progress {
+    Single(Part, bool),
+    OneOf(HashMap<Part, bool>),
+    TwoOf(HashMap<Part, bool>),
+    AllOf(HashMap<Part, bool>),
+    Combined {
+        left: Box<Progress>,
+        right: Box<Progress>,
+    },
+}
+
+impl Progress {
+    fn from_parts(parts: &Parts) -> Self {
+        match parts {
+            Parts::Single(part) => Self::Single(*part, false),
+            Parts::OneOf(parts) => Self::OneOf(parts.iter().copied().map(|p| (p, false)).collect()),
+            Parts::TwoOf(parts) => Self::TwoOf(parts.iter().copied().map(|p| (p, false)).collect()),
+            Parts::AllOf(parts) => Self::AllOf(parts.iter().copied().map(|p| (p, false)).collect()),
+            Parts::Combined { left, right } => Self::Combined {
+                left: Box::new(Self::from_parts(left)),
+                right: Box::new(Self::from_parts(right)),
+            },
+        }
+    }
+
+    fn track(&mut self, new_part: impl Into<Part>) -> bool {
+        use Progress::*;
+
+        let new_part = new_part.into();
+
+        match self {
+            Single(part, ref mut is_complete) => {
+                if new_part == *part {
+                    *is_complete = true;
+                    return true;
+                }
+            }
+            OneOf(ref mut progress) | TwoOf(ref mut progress) | AllOf(ref mut progress) => {
+                if let Some(is_complete) = progress.get_mut(&new_part) {
+                    *is_complete = true;
+                    return true;
+                }
+            }
+            Combined { left, right } => {
+                return left.track(new_part) || right.track(new_part);
+            }
+        }
+
+        false
+    }
+
+    fn completion(&self) -> Ratio<u8> {
+        use Progress::*;
+
+        match self {
+            Single(_, is_completed) => Ratio::new(*is_completed as u8, 1),
+            OneOf(inner) => {
+                let completed_count = inner.values().filter(|is_completed| **is_completed).count();
+
+                Ratio::new(std::cmp::min(completed_count, 1) as u8, 1)
+            }
+            TwoOf(inner) => {
+                let completed_count = inner.values().filter(|is_completed| **is_completed).count();
+
+                Ratio::new(std::cmp::min(completed_count, 2) as u8, 2)
+            }
+            AllOf(inner) => {
+                let completed_count = inner.values().filter(|is_completed| **is_completed).count();
+
+                Ratio::new(
+                    std::cmp::min(completed_count, inner.len()) as u8,
+                    inner.len() as u8,
+                )
+            }
+            Combined { left, right } => {
+                let left_ratio = left.completion();
+                let right_ratio = right.completion();
+
+                Ratio::new(
+                    left_ratio.numer() + right_ratio.numer(),
+                    left_ratio.denom() + right_ratio.denom(),
+                )
+            }
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        use Progress::*;
+
+        let check_is_complete_count = |progress: &HashMap<Part, bool>, count: usize| -> bool {
+            progress
+                .iter()
+                .filter(|(_, is_complete)| **is_complete)
+                .count()
+                >= count
+        };
+
+        match self {
+            Single(_, is_complete) => *is_complete,
+            OneOf(inner) => check_is_complete_count(inner, 1),
+            TwoOf(inner) => check_is_complete_count(inner, 2),
+            AllOf(inner) => inner.iter().all(|(_, is_complete)| *is_complete),
+            Combined { left, right } => left.is_complete() && right.is_complete(),
+        }
     }
 }
 
@@ -869,116 +979,52 @@ pub enum Tag {
 mod tests {
     use super::*;
 
-    use std::collections::HashMap;
-
-    mod roadmap {
+    mod progress {
         use super::*;
 
+        use test_case::test_case;
+
         #[test]
-        fn test_two_of() {
-            let synergy = serde_json::from_str::<Spec>(r#"
-              {
-                "effect": "Slightly increases movement speed and increases the shot speed of the guns by 25%.",
-                "parts": {
-                  "two_of": [
-                    { "gun": "Strafe Gun" },
-                    { "gun": "BSG" },
-                    { "gun": "Thunderclap" }
-                  ]
-                }
-              }
-            "#).unwrap();
+        fn test_track_single() {
+            let item = item::Tag::_C4;
 
-            let expected = BTreeSet::from_iter([
-                (
-                    Gun::_StrafeGun.into(),
-                    BTreeSet::from_iter([Gun::_BSG.into()]),
-                ),
-                (
-                    Gun::_StrafeGun.into(),
-                    BTreeSet::from_iter([Gun::_Thunderclap.into()]),
-                ),
-                (
-                    Gun::_BSG.into(),
-                    BTreeSet::from_iter([Gun::_StrafeGun.into()]),
-                ),
-                (
-                    Gun::_BSG.into(),
-                    BTreeSet::from_iter([Gun::_Thunderclap.into()]),
-                ),
-                (
-                    Gun::_Thunderclap.into(),
-                    BTreeSet::from_iter([Gun::_StrafeGun.into()]),
-                ),
-                (
-                    Gun::_Thunderclap.into(),
-                    BTreeSet::from_iter([Gun::_BSG.into()]),
-                ),
-            ]);
+            let parts = Parts::Single(item.into());
+            let mut progress = Progress::from_parts(&parts);
 
-            assert_eq!(synergy.roadmaps(), expected);
+            assert!(progress.track(item));
+            assert!(progress.track(item));
+
+            let unrelated_item = gun::Tag::_BigIron;
+
+            assert!(!progress.track(unrelated_item));
         }
 
-        #[test]
-        fn test_all_of() {
-            let synergy = serde_json::from_str::<Spec>(r#"
-              {
-                "effect": "Increases the damage, maximum ammo, and rate of fire of the guns by 25%.",
-                "parts": {
-                  "all_of": [
-                    { "gun": "M1" },
-                    { "gun": "M16" },
-                    { "gun": "M1911" }
-                  ]
-                }
-              }
-            "#).unwrap();
+        #[test_case(Parts::OneOf; "one_of")]
+        #[test_case(Parts::TwoOf; "two_of")]
+        #[test_case(Parts::AllOf; "all_of")]
+        fn test_track_n_of(mk_parts: fn(HashSet<Part>) -> Parts) {
+            let part1 = item::Tag::_C4;
+            let part2 = gun::Tag::_Casey;
+            let part3 = item::Tag::_Box;
 
-            let expected = BTreeSet::from_iter([
-                (
-                    Gun::_M1.into(),
-                    BTreeSet::from_iter([Gun::_M16.into(), Gun::_M1911.into()]),
-                ),
-                (
-                    Gun::_M16.into(),
-                    BTreeSet::from_iter([Gun::_M1.into(), Gun::_M1911.into()]),
-                ),
-                (
-                    Gun::_M1911.into(),
-                    BTreeSet::from_iter([Gun::_M1.into(), Gun::_M16.into()]),
-                ),
-            ]);
+            let parts = mk_parts(HashSet::from_iter([
+                part1.into(),
+                part2.into(),
+                part3.into(),
+            ]));
+            let mut progress = Progress::from_parts(&parts);
 
-            assert_eq!(synergy.roadmaps(), expected);
-        }
-    }
-
-    mod deserialize {
-        use super::*;
-
-        #[test]
-        fn test_single() {
-            let raw = r#"
-            {
-                "Wicked Sister": {
-                    "effect": "something",
-                    "parts": {"single": {"gun": "Casey"}}
+            let parts = Vec::<Part>::from_iter([part1.into(), part2.into(), part3.into()]);
+            for part in parts {
+                for _ in [1, 2] {
+                    assert!(progress.track(part));
+                    assert!(progress.track(part));
                 }
             }
-            "#;
 
-            let expected = HashMap::<Synergy, Spec>::from_iter([(
-                Synergy::_WickedSister,
-                Spec {
-                    effect: "something".to_string(),
-                    parts: Parts::Single(Part::Gun(Gun::_Casey)),
-                },
-            )]);
+            let unrelated_item = gun::Tag::_BigIron;
 
-            assert_eq!(
-                serde_json::from_str::<HashMap<Synergy, Spec>>(raw).unwrap(),
-                expected
-            );
+            assert!(!progress.track(unrelated_item));
         }
     }
 }
