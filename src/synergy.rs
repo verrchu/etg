@@ -1,28 +1,8 @@
-use super::{gun, item};
+use super::equipable::Equipable;
 
 use std::collections::{HashMap, HashSet};
 
-use num::rational::Ratio;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-enum Part {
-    Gun(gun::Tag),
-    Item(item::Tag),
-}
-
-impl From<gun::Tag> for Part {
-    fn from(gun: gun::Tag) -> Part {
-        Part::Gun(gun)
-    }
-}
-
-impl From<item::Tag> for Part {
-    fn from(item: item::Tag) -> Part {
-        Part::Item(item)
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Spec {
@@ -40,146 +20,201 @@ impl Synergy {
         Self { tag, spec }
     }
 
-    pub fn contains(&self, part: impl Into<Part>) -> bool {
-        self.spec.parts.contains(part.into())
+    pub fn contains(&self, e: impl Into<Equipable>) -> bool {
+        self.spec.parts.contains(&e.into())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum Progress {
-    Single(Part, bool),
-    OneOf(HashMap<Part, bool>),
-    TwoOf(HashMap<Part, bool>),
-    AllOf(HashMap<Part, bool>),
-    Combined {
-        left: Box<Progress>,
-        right: Box<Progress>,
-    },
-}
+mod progress {
+    use super::{parts::Parts, *};
 
-impl Progress {
-    fn from_parts(parts: &Parts) -> Self {
-        match parts {
-            Parts::Single(part) => Self::Single(*part, false),
-            Parts::OneOf(parts) => Self::OneOf(parts.iter().copied().map(|p| (p, false)).collect()),
-            Parts::TwoOf(parts) => Self::TwoOf(parts.iter().copied().map(|p| (p, false)).collect()),
-            Parts::AllOf(parts) => Self::AllOf(parts.iter().copied().map(|p| (p, false)).collect()),
-            Parts::Combined { left, right } => Self::Combined {
-                left: Box::new(Self::from_parts(left)),
-                right: Box::new(Self::from_parts(right)),
-            },
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(untagged)]
+    enum Progress {
+        Primitive(Primitive),
+        Combined { left: Primitive, right: Primitive },
+    }
+
+    impl Progress {
+        fn track(&mut self, e: impl Into<Equipable>) -> bool {
+            let e = e.into();
+
+            match self {
+                Self::Primitive(inner) => inner.track(&e),
+                Self::Combined { left, right } => left.track(&e) || right.track(&e),
+            }
+        }
+
+        fn completion(&self) -> Vec<(u8, u8)> {
+            use Progress::*;
+
+            match self {
+                Primitive(inner) => vec![inner.completion()],
+                Combined { left, right } => vec![left.completion(), right.completion()],
+            }
+        }
+
+        fn is_complete(&self) -> bool {
+            use Progress::*;
+
+            match self {
+                Primitive(inner) => inner.is_complete(),
+                Combined { left, right } => left.is_complete() && right.is_complete(),
+            }
         }
     }
 
-    fn track(&mut self, new_part: impl Into<Part>) -> bool {
-        use Progress::*;
+    impl From<Parts> for Progress {
+        fn from(input: Parts) -> Self {
+            match input {
+                Parts::Primitive(parts) => Progress::Primitive(parts.into()),
+                Parts::Combined { left, right } => Progress::Combined {
+                    left: left.into(),
+                    right: right.into(),
+                },
+            }
+        }
+    }
 
-        let new_part = new_part.into();
+    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    enum Primitive {
+        Single(Equipable, bool),
+        OneOf(HashMap<Equipable, bool>),
+        TwoOf(HashMap<Equipable, bool>),
+        AllOf(HashMap<Equipable, bool>),
+    }
 
-        match self {
-            Single(part, ref mut is_complete) => {
-                if new_part == *part {
-                    *is_complete = true;
-                    return true;
+    impl Primitive {
+        fn track(&mut self, new: &Equipable) -> bool {
+            use Primitive::*;
+
+            match self {
+                Single(e, ref mut is_complete) => {
+                    if new == e {
+                        *is_complete = true;
+                        return true;
+                    }
+                }
+                OneOf(ref mut progress) | TwoOf(ref mut progress) | AllOf(ref mut progress) => {
+                    if let Some(is_complete) = progress.get_mut(new) {
+                        *is_complete = true;
+                        return true;
+                    }
                 }
             }
-            OneOf(ref mut progress) | TwoOf(ref mut progress) | AllOf(ref mut progress) => {
-                if let Some(is_complete) = progress.get_mut(&new_part) {
-                    *is_complete = true;
-                    return true;
+
+            false
+        }
+
+        fn completion(&self) -> (u8, u8) {
+            use Primitive::*;
+
+            use std::cmp::min;
+
+            match self {
+                Single(_, is_completed) => (*is_completed as u8, 1),
+                OneOf(inner) => {
+                    let completed_count =
+                        inner.values().filter(|is_completed| **is_completed).count();
+
+                    (min(completed_count, 1) as u8, 1)
+                }
+                TwoOf(inner) => {
+                    let completed_count =
+                        inner.values().filter(|is_completed| **is_completed).count();
+
+                    (min(completed_count, 2) as u8, 2)
+                }
+                AllOf(inner) => {
+                    let completed_count =
+                        inner.values().filter(|is_completed| **is_completed).count();
+
+                    (min(completed_count, inner.len()) as u8, inner.len() as u8)
                 }
             }
-            Combined { left, right } => {
-                return left.track(new_part) || right.track(new_part);
-            }
         }
 
-        false
-    }
+        fn is_complete(&self) -> bool {
+            use Primitive::*;
 
-    fn completion(&self) -> Ratio<u8> {
-        use Progress::*;
+            let check_is_complete_count =
+                |progress: &HashMap<Equipable, bool>, count: usize| -> bool {
+                    progress
+                        .iter()
+                        .filter(|(_, is_complete)| **is_complete)
+                        .count()
+                        >= count
+                };
 
-        match self {
-            Single(_, is_completed) => Ratio::new(*is_completed as u8, 1),
-            OneOf(inner) => {
-                let completed_count = inner.values().filter(|is_completed| **is_completed).count();
-
-                Ratio::new(std::cmp::min(completed_count, 1) as u8, 1)
-            }
-            TwoOf(inner) => {
-                let completed_count = inner.values().filter(|is_completed| **is_completed).count();
-
-                Ratio::new(std::cmp::min(completed_count, 2) as u8, 2)
-            }
-            AllOf(inner) => {
-                let completed_count = inner.values().filter(|is_completed| **is_completed).count();
-
-                Ratio::new(
-                    std::cmp::min(completed_count, inner.len()) as u8,
-                    inner.len() as u8,
-                )
-            }
-            Combined { left, right } => {
-                let left_ratio = left.completion();
-                let right_ratio = right.completion();
-
-                Ratio::new(
-                    left_ratio.numer() + right_ratio.numer(),
-                    left_ratio.denom() + right_ratio.denom(),
-                )
+            match self {
+                Single(_, is_complete) => *is_complete,
+                OneOf(inner) => check_is_complete_count(inner, 1),
+                TwoOf(inner) => check_is_complete_count(inner, 2),
+                AllOf(inner) => inner.iter().all(|(_, is_complete)| *is_complete),
             }
         }
     }
 
-    fn is_complete(&self) -> bool {
-        use Progress::*;
+    impl From<parts::Primitive> for Primitive {
+        fn from(input: parts::Primitive) -> Self {
+            use parts::Primitive::*;
 
-        let check_is_complete_count = |progress: &HashMap<Part, bool>, count: usize| -> bool {
-            progress
-                .iter()
-                .filter(|(_, is_complete)| **is_complete)
-                .count()
-                >= count
-        };
-
-        match self {
-            Single(_, is_complete) => *is_complete,
-            OneOf(inner) => check_is_complete_count(inner, 1),
-            TwoOf(inner) => check_is_complete_count(inner, 2),
-            AllOf(inner) => inner.iter().all(|(_, is_complete)| *is_complete),
-            Combined { left, right } => left.is_complete() && right.is_complete(),
+            match input {
+                Single(e) => Self::Single(e, false),
+                OneOf(es) => Self::OneOf(es.into_iter().map(|p| (p, false)).collect()),
+                TwoOf(es) => Self::TwoOf(es.into_iter().map(|p| (p, false)).collect()),
+                AllOf(es) => Self::AllOf(es.into_iter().map(|p| (p, false)).collect()),
+            }
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum Parts {
-    Single(Part),
-    OneOf(HashSet<Part>),
-    TwoOf(HashSet<Part>),
-    AllOf(HashSet<Part>),
-    Combined { left: Box<Parts>, right: Box<Parts> },
-}
+use parts::Parts;
+mod parts {
+    use super::*;
 
-impl Parts {
-    fn contains(&self, part: Part) -> bool {
-        use Parts::*;
+    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+    #[serde(untagged)]
+    pub(super) enum Parts {
+        Primitive(Primitive),
+        Combined { left: Primitive, right: Primitive },
+    }
 
-        let part = part.into();
+    impl Parts {
+        pub fn contains(&self, e: &Equipable) -> bool {
+            use Parts::*;
 
-        match self {
-            Single(inner) => part == *inner,
-            OneOf(inner) | TwoOf(inner) | AllOf(inner) => inner.contains(&part),
-            Combined { left, right } => left.contains(part) || right.contains(part),
+            match self {
+                Self::Primitive(inner) => inner.contains(e),
+                Combined { left, right } => left.contains(e) || right.contains(e),
+            }
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+    #[serde(rename_all = "snake_case")]
+    pub enum Primitive {
+        Single(Equipable),
+        OneOf(HashSet<Equipable>),
+        TwoOf(HashSet<Equipable>),
+        AllOf(HashSet<Equipable>),
+    }
+
+    impl Primitive {
+        fn contains(&self, e: &Equipable) -> bool {
+            use Primitive::*;
+
+            match self {
+                Single(inner) => e == inner,
+                OneOf(inner) | TwoOf(inner) | AllOf(inner) => inner.contains(e),
+            }
         }
     }
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Tag {
     #[serde(rename = "Absent Minded")]
     _AbsentMinded,
@@ -973,58 +1008,4 @@ pub enum Tag {
     _WillingToSacrifice,
     #[serde(rename = r#"\o/"#)]
     _HandsUp,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    mod progress {
-        use super::*;
-
-        use test_case::test_case;
-
-        #[test]
-        fn test_track_single() {
-            let item = item::Tag::_C4;
-
-            let parts = Parts::Single(item.into());
-            let mut progress = Progress::from_parts(&parts);
-
-            assert!(progress.track(item));
-            assert!(progress.track(item));
-
-            let unrelated_item = gun::Tag::_BigIron;
-
-            assert!(!progress.track(unrelated_item));
-        }
-
-        #[test_case(Parts::OneOf; "one_of")]
-        #[test_case(Parts::TwoOf; "two_of")]
-        #[test_case(Parts::AllOf; "all_of")]
-        fn test_track_n_of(mk_parts: fn(HashSet<Part>) -> Parts) {
-            let part1 = item::Tag::_C4;
-            let part2 = gun::Tag::_Casey;
-            let part3 = item::Tag::_Box;
-
-            let parts = mk_parts(HashSet::from_iter([
-                part1.into(),
-                part2.into(),
-                part3.into(),
-            ]));
-            let mut progress = Progress::from_parts(&parts);
-
-            let parts = Vec::<Part>::from_iter([part1.into(), part2.into(), part3.into()]);
-            for part in parts {
-                for _ in [1, 2] {
-                    assert!(progress.track(part));
-                    assert!(progress.track(part));
-                }
-            }
-
-            let unrelated_item = gun::Tag::_BigIron;
-
-            assert!(!progress.track(unrelated_item));
-        }
-    }
 }

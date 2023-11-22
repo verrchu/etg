@@ -1,6 +1,7 @@
 mod gun;
 mod item;
 mod synergy;
+mod equipable;
 
 use synergy::Synergy;
 
