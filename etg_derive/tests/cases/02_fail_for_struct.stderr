@@ -1,0 +1,5 @@
+error: expected enum
+ --> tests/cases/02_fail_for_struct.rs:2:8
+  |
+2 | struct S;
+  |        ^

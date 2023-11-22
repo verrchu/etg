@@ -1,0 +1,5 @@
+error: no #[serde(rename = <target>)] attribute defined
+ --> tests/cases/03_mandatory_serde_rename.rs:5:5
+  |
+5 |     B,
+  |     ^
