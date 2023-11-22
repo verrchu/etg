@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Spec {
-    effect: String,
-    parts: Parts,
+    pub effect: String,
+    pub parts: Parts,
 }
 
 pub struct Synergy {
@@ -25,18 +25,19 @@ impl Synergy {
     }
 }
 
+pub use progress::Progress;
 mod progress {
     use super::{parts::Parts, *};
 
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(untagged)]
-    enum Progress {
+    pub enum Progress {
         Primitive(Primitive),
         Combined { left: Primitive, right: Primitive },
     }
 
     impl Progress {
-        fn track(&mut self, e: impl Into<Equipable>) -> bool {
+        pub fn track(&mut self, e: impl Into<Equipable>) -> bool {
             let e = e.into();
 
             match self {
@@ -45,22 +46,24 @@ mod progress {
             }
         }
 
-        fn completion(&self) -> Vec<(u8, u8)> {
+        pub fn completion(&self) -> (u8, u8) {
             use Progress::*;
 
             match self {
-                Primitive(inner) => vec![inner.completion()],
-                Combined { left, right } => vec![left.completion(), right.completion()],
+                Primitive(inner) => inner.completion(),
+                Combined { left, right } => {
+                    let (la, lb) = left.completion();
+                    let (ra, rb) = right.completion();
+
+                    // TODO: explain
+                    (la + ra, lb + rb)
+                }
             }
         }
 
-        fn is_complete(&self) -> bool {
-            use Progress::*;
-
-            match self {
-                Primitive(inner) => inner.is_complete(),
-                Combined { left, right } => left.is_complete() && right.is_complete(),
-            }
+        pub fn is_complete(&self) -> bool {
+            let (n, d) = self.completion();
+            n == d // TODO: explain
         }
     }
 
@@ -78,7 +81,7 @@ mod progress {
 
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
-    enum Primitive {
+    pub enum Primitive {
         Single(Equipable, bool),
         OneOf(HashMap<Equipable, bool>),
         TwoOf(HashMap<Equipable, bool>),
@@ -134,26 +137,6 @@ mod progress {
                 }
             }
         }
-
-        fn is_complete(&self) -> bool {
-            use Primitive::*;
-
-            let check_is_complete_count =
-                |progress: &HashMap<Equipable, bool>, count: usize| -> bool {
-                    progress
-                        .iter()
-                        .filter(|(_, is_complete)| **is_complete)
-                        .count()
-                        >= count
-                };
-
-            match self {
-                Single(_, is_complete) => *is_complete,
-                OneOf(inner) => check_is_complete_count(inner, 1),
-                TwoOf(inner) => check_is_complete_count(inner, 2),
-                AllOf(inner) => inner.iter().all(|(_, is_complete)| *is_complete),
-            }
-        }
     }
 
     impl From<parts::Primitive> for Primitive {
@@ -176,7 +159,7 @@ mod parts {
 
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
     #[serde(untagged)]
-    pub(super) enum Parts {
+    pub enum Parts {
         Primitive(Primitive),
         Combined { left: Primitive, right: Primitive },
     }
