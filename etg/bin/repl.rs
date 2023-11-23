@@ -74,6 +74,10 @@ impl Progress {
             .take_while(|s| !matches!(s.progress.completion(), (0, _)))
     }
 
+    fn iter(&self) -> impl Iterator<Item = &'_ Synergy> {
+        self.0.iter()
+    }
+
     fn sort(&mut self) {
         self.0.sort_by(|a, b| {
             let calc_completion = |synergy: &Synergy| {
@@ -158,10 +162,29 @@ fn run() -> anyhow::Result<()> {
                         progress.sort();
                     }
                     Some(("?", tag)) => {
-                        let Some(_e) = parse_tag(tag) else {
+                        let Some(e) = parse_tag(tag) else {
                             writeln!(stdout, "unknown tag: {}", tag)?;
                             continue;
                         };
+
+                        for synergy in progress.iter() {
+                            let (n1, _) = synergy.progress.completion();
+                            let mut progress = synergy.progress.clone();
+                            progress.track(e);
+                            let (n2, d) = progress.completion();
+
+                            if n2 > n1 {
+                                writeln!(
+                                    stdout,
+                                    "- {} ({}/{}) -> ({}/{})",
+                                    synergy.tag.tag(),
+                                    n1,
+                                    d,
+                                    n2,
+                                    d
+                                )?;
+                            }
+                        }
 
                         // TODO
                     }

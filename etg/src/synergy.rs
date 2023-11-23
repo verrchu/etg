@@ -29,7 +29,7 @@ pub use progress::Progress;
 pub mod progress {
     use super::{parts::Parts, *};
 
-    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(untagged)]
     pub enum Progress {
         Primitive(Primitive),
@@ -79,7 +79,7 @@ pub mod progress {
         }
     }
 
-    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
     pub enum Primitive {
         Single(Equipable, bool),
