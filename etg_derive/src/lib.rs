@@ -78,17 +78,17 @@ pub fn tags_derive(input: TokenStream) -> TokenStream {
 
     quote! {
         impl #ident {
-            fn tags() -> &'static [&'static str] {
+            pub fn tags() -> &'static [&'static str] {
                 &[#(#tags),*]
             }
 
-            fn tag(&self) -> &'static str {
+            pub fn tag(&self) -> &'static str {
                 use #ident::*;
 
                 match self { #(#variant_to_tag_entries),* }
             }
 
-            fn by_tag(tag: &str) -> Option<Self> {
+            pub fn by_tag(tag: &str) -> Option<Self> {
                 use #ident::*;
 
                 match tag { #(#tag_to_variant_entries),* }

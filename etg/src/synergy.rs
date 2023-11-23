@@ -26,7 +26,7 @@ impl Synergy {
 }
 
 pub use progress::Progress;
-mod progress {
+pub mod progress {
     use super::{parts::Parts, *};
 
     #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,7 +197,7 @@ mod parts {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, etg_derive::Tags)]
 pub enum Tag {
     #[serde(rename = "Absent Minded")]
     _AbsentMinded,

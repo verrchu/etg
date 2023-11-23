@@ -19,7 +19,7 @@ impl From<Item> for Equipable {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, etg_derive::Tags)]
 pub enum Gun {
     #[serde(rename = "Casey")]
     _Casey,
@@ -485,7 +485,7 @@ pub enum Gun {
     _FinishedGun,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, etg_derive::Tags)]
 pub enum Item {
     #[serde(rename = "Master Round I")]
     _MasterRoundI,

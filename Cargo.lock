@@ -175,6 +175,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "csv",
+ "etg_derive",
  "itertools",
  "num",
  "reqwest",
